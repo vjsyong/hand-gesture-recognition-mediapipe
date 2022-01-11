@@ -14,7 +14,8 @@ from utils import WebcamVideoStream
 from utils import CvFpsCalc
 from model import KeyPointClassifier
 
-from utils.ws4pyReconnectClient import ws4pyReconnectClient
+import websocket
+
 
 commands = ["070070000", "", "000070000", "000000070", "070000000", "000070070"] #BBBGGGRRR values 
 # commands = ["100100000", "", "000100000", "000000100", "100000000", "000100100"] #BBBGGGRRR values 
@@ -66,19 +67,19 @@ def main():
     use_brect = True
 
     # Camera preparation ###############################################################
-    # cap = cv.VideoCapture(cap_device)
-    # cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
-    # cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
     import logging
     logging.basicConfig(level=logging.DEBUG)
-    ws = ws4pyReconnectClient(webserver_address)
-    ws.start()
-    while not ws._connected:
-        pass
-    # ws.connect()
+    ws = websocket.WebSocket()
+    connected = False
+    while not connected:
+        try:
+            ws.connect(webserver_address, timeout=2)
+            connected = True
+        except:
+            print("Connection failed, retrying...")
+
     ws.send("{\"transition\":2}") # Set light transition time to 200ms
-    # ws.run_forever()
-    # ws.connect()    
+
 
     stream = WebcamVideoStream(src=cap_device,cap_height=cap_height,cap_width=cap_width).start()
 
@@ -106,7 +107,7 @@ def main():
     cvFpsCalc = CvFpsCalc(buffer_len=10)
 
     #  ########################################################################
-    mode = 0
+    last_hand_sign_id = 0
 
     while True:
         fps = cvFpsCalc.get()
@@ -146,11 +147,17 @@ def main():
 
                 # Hand sign classification
                 hand_sign_id, confidence = keypoint_classifier(pre_processed_landmark_list)
+                message = ""
                 if confidence > 0.7:
                     if hand_sign_id == 1:
-                        ws.send("{\"on\":false}") 
+                        message = "{\"on\":false}"
                     else:
-                        ws.send(f"{{\"seg\":[{{\"fx\":0, \"lx\":{commands[hand_sign_id]}}}]}}")
+                        message = f"{{\"seg\":[{{\"fx\":0, \"lx\":{commands[hand_sign_id]}}}]}}"
+
+                    if last_hand_sign_id != hand_sign_id:
+                        ws.send(message)
+
+                    last_hand_sign_id = hand_sign_id
 
                 # Drawing part
                 debug_image = draw_bounding_rect(use_brect, debug_image, brect)
@@ -170,6 +177,7 @@ def main():
         cv.imshow('Hand Gesture Recognition', debug_image)
 
     cv.destroyAllWindows()
+    ws.close()
 
 
 
