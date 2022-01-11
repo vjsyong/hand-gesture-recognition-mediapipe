@@ -14,7 +14,7 @@ from utils import WebcamVideoStream
 from utils import CvFpsCalc
 from model import KeyPointClassifier
 
-from ws4py.client.threadedclient import WebSocketClient
+from utils.ws4pyReconnectClient import ws4pyReconnectClient
 
 commands = ["070070000", "", "000070000", "000000070", "070000000", "000070070"] #BBBGGGRRR values 
 # commands = ["100100000", "", "000100000", "000000100", "100000000", "000100100"] #BBBGGGRRR values 
@@ -49,14 +49,6 @@ def get_args():
 
     return args
 
-class WSClient(WebSocketClient):
-  def opened(self):
-      print("Websocket open")
-  def closed(self, code, reason=None):
-      print("Connection closed down", code, reason)
-  def received_message(self, m):
-      print(m)
-
 def main():
     # Argument parsing #################################################################
     args = get_args()
@@ -69,7 +61,7 @@ def main():
     min_detection_confidence = args.min_detection_confidence
     min_tracking_confidence = args.min_tracking_confidence
     min_classification_confidence = args.min_classification_confidence
-    ws_server = args.webserver_address
+    webserver_address = args.webserver_address
 
     use_brect = True
 
@@ -77,8 +69,11 @@ def main():
     # cap = cv.VideoCapture(cap_device)
     # cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
     # cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
-    ws = WSClient(ws_server)
-    ws.connect()
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    ws = ws4pyReconnectClient(webserver_address)
+    ws.start()
+    # ws.connect()
     ws.send("{\"transition\":2}") # Set light transition time to 200ms
     # ws.run_forever()
     # ws.connect()    

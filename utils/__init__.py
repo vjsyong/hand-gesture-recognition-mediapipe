@@ -1,2 +1,3 @@
 from utils.cvfpscalc import CvFpsCalc
 from utils.webcamvideostream import WebcamVideoStream
+from utils.ws4pyReconnectClient import ws4pyReconnectClient
