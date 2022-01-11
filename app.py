@@ -170,7 +170,6 @@ def main():
         cv.imshow('Hand Gesture Recognition', debug_image)
 
     cv.destroyAllWindows()
-    ws.stop()
 
 
 
