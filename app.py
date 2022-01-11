@@ -73,6 +73,8 @@ def main():
     logging.basicConfig(level=logging.DEBUG)
     ws = ws4pyReconnectClient(webserver_address)
     ws.start()
+    while not ws._connected:
+        pass
     # ws.connect()
     ws.send("{\"transition\":2}") # Set light transition time to 200ms
     # ws.run_forever()
@@ -168,7 +170,7 @@ def main():
         cv.imshow('Hand Gesture Recognition', debug_image)
 
     cv.destroyAllWindows()
-    ws.close()
+    ws.stop()
 
 
 

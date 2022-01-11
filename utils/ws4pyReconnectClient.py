@@ -6,6 +6,9 @@ import logging
 from ws4py.client import WebSocketBaseClient
 from ws4py.streaming import Stream
 
+
+
+
 logger = logging.getLogger(__name__)
 
 class ws4pyReconnectClient(WebSocketBaseClient):
@@ -15,7 +18,7 @@ class ws4pyReconnectClient(WebSocketBaseClient):
         super().__init__(url, *args, **kwargs)
         self._stop = threading.Event()
         """Maximum timeout to wait before a reconnect is attempted"""
-        self.maxTimeout = 5
+        self.maxTimeout = 2
 
         """Connection status indicator"""
         self._connected = False
