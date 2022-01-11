@@ -1,7 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import numpy as np
-import tensorflow as tf
+
+use_tflite_runtime = False
+try:
+    import tensorflow as tf
+except:
+    import tflite_runtime.interpreter as tflite
+    use_tflite_runtime = True
 
 
 class KeyPointClassifier(object):
@@ -10,7 +16,11 @@ class KeyPointClassifier(object):
         model_path='model/keypoint_classifier/keypoint_classifier.tflite',
         num_threads=1,
     ):
-        self.interpreter = tf.lite.Interpreter(model_path=model_path,
+        if use_tflite_runtime:
+            self.interpreter = tflite.Interpreter(model_path=model_path,
+                                               num_threads=num_threads)
+        else:
+            self.interpreter = tf.lite.Interpreter(model_path=model_path,
                                                num_threads=num_threads)
 
         self.interpreter.allocate_tensors()

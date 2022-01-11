@@ -23,7 +23,7 @@ commands = ["070070000", "", "000070000", "000000070", "070000000", "000070070"]
 def get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--device", type=int, default=2)
+    parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--width", help='cap width', type=int, default=320)
     parser.add_argument("--height", help='cap height', type=int, default=240)
 
@@ -168,6 +168,7 @@ def main():
         cv.imshow('Hand Gesture Recognition', debug_image)
 
     cv.destroyAllWindows()
+    ws.close()
 
 
 
