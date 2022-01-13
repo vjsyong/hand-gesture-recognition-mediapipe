@@ -8,7 +8,7 @@ class WebcamVideoStream:
   def __init__(self, src=0, cap_height=None, cap_width=None, name="WebcamVideoStream"):
     # initialize the video camera stream and read the first frame
     # from the stream
-    self.stream = cv2.VideoCapture(src)
+    self.stream = cv2.VideoCapture(src, cv2.CAP_V4L2)
     self.stream.set(cv2.CAP_PROP_FRAME_WIDTH, cap_width)
     self.stream.set(cv2.CAP_PROP_FRAME_HEIGHT, cap_height)
     (self.grabbed, self.frame) = self.stream.read()

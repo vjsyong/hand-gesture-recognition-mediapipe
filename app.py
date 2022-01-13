@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import os
 import csv
 import copy
 import argparse
 import itertools
+import time
 import math
 
 import cv2 as cv
@@ -15,6 +17,19 @@ from utils import CvFpsCalc
 from model import KeyPointClassifier
 
 import websocket
+# Raspberry Pi specific
+on_rpi = True
+try:
+    import RPi.GPIO as GPIO
+    GPIO.setmode(GPIO.BCM)
+    white_led = 18
+    GPIO.setup(white_led,GPIO.OUT)
+    print("LED setup")
+except Exception as e:
+    # Set on_rpi false if developing on other env
+    print(e)
+    on_rpi = False
+    print("on_rpi set to false")
 
 
 commands = ["070070000", "", "000070000", "000000070", "070000000", "000070070"] #BBBGGGRRR values 
@@ -24,7 +39,7 @@ commands = ["070070000", "", "000070000", "000000070", "070000000", "000070070"]
 def get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--device", type=int, default=2)
+    parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--width", help='cap width', type=int, default=320)
     parser.add_argument("--height", help='cap height', type=int, default=240)
 
@@ -32,7 +47,7 @@ def get_args():
     parser.add_argument("--min_detection_confidence",
                         help='min_detection_confidence',
                         type=float,
-                        default=0.8)
+                        default=0.5)
     parser.add_argument("--min_tracking_confidence",
                         help='min_tracking_confidence',
                         type=float,
@@ -95,7 +110,8 @@ def main():
     keypoint_classifier = KeyPointClassifier()
 
     # Read labels ###########################################################
-    with open('model/keypoint_classifier/keypoint_classifier_label.csv',
+    label_path = os.path.dirname(os.path.realpath(__file__)) + '/model/keypoint_classifier/keypoint_classifier_label.csv'
+    with open(label_path,
               encoding='utf-8-sig') as f:
         keypoint_classifier_labels = csv.reader(f)
         keypoint_classifier_labels = [
@@ -108,6 +124,12 @@ def main():
 
     #  ########################################################################
     last_hand_sign_id = 0
+
+    # Signal that app is ready
+    if on_rpi:
+        GPIO.output(white_led, GPIO.HIGH)
+        time.sleep(2)
+        GPIO.output(white_led, GPIO.LOW)
 
     while True:
         fps = cvFpsCalc.get()
@@ -134,6 +156,9 @@ def main():
 
         #  ####################################################################
         if results.multi_hand_landmarks is not None:
+            if on_rpi:
+                GPIO.output(white_led, GPIO.HIGH)
+            
             for hand_landmarks, handedness in zip(results.multi_hand_landmarks,
                                                   results.multi_handedness):
                 # Bounding box calculation
@@ -155,28 +180,34 @@ def main():
                         message = f"{{\"seg\":[{{\"fx\":0, \"lx\":{commands[hand_sign_id]}}}]}}"
 
                     if last_hand_sign_id != hand_sign_id:
-                        ws.send(message)
+                        try:
+                            ws.send(message)
+                        except:
+                            ws.connect(webserver_address, timeout=2)
+                            ws.send(message)
 
                     last_hand_sign_id = hand_sign_id
 
                 # Drawing part
-                debug_image = draw_bounding_rect(use_brect, debug_image, brect)
-                debug_image = draw_landmarks(debug_image, landmark_list)
-                debug_image = draw_info_text(
-                    debug_image,
-                    brect,
-                    handedness,
-                    keypoint_classifier_labels[hand_sign_id],
-                    confidence,
-                    min_classification_confidence
-                )
-
-        debug_image = draw_info(debug_image, fps)
+                #debug_image = draw_bounding_rect(use_brect, debug_image, brect)
+                #debug_image = draw_landmarks(debug_image, landmark_list)
+                #debug_image = draw_info_text(
+                #    debug_image,
+                #    brect,
+                #    handedness,
+                #    keypoint_classifier_labels[hand_sign_id],
+                #    confidence,
+                #    min_classification_confidence
+                #)
+        else:
+            if on_rpi:
+                GPIO.output(white_led, GPIO.LOW)
+        #debug_image = draw_info(debug_image, fps)
 
         # Screen reflection #############################################################
-        cv.imshow('Hand Gesture Recognition', debug_image)
+        #cv.imshow('Hand Gesture Recognition', debug_image)
 
-    cv.destroyAllWindows()
+    #cv.destroyAllWindows()
     ws.close()
 
 
