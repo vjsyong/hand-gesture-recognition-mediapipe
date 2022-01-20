@@ -140,6 +140,7 @@ def main():
         logging.debug("LED Setting to Low")
         GPIO.output(white_led, GPIO.LOW)
 
+    fps_last_disp_time = time.time()
     while True:
         fps = cvFpsCalc.get()
 
@@ -198,7 +199,8 @@ def main():
                             ws.send(message)
 
                     last_hand_sign_id = hand_sign_id
-
+                
+                
                 # Drawing part
                 if debug_mode:
                     image = draw_bounding_rect(use_brect, image, brect)
@@ -212,6 +214,12 @@ def main():
         if debug_mode:
             image = draw_info(image, fps)
             cv.imshow('Hand Gesture Recognition', image)
+        else:
+            # If no display, show fps to terminal instead
+            current_time = time.time()
+            if (current_time - fps_last_disp_time) > 5:
+                logging.info(f"FPS: {str(fps)}")
+                fps_last_disp_time = current_time
 
     #cv.destroyAllWindows()
     ws.close()
