@@ -150,7 +150,8 @@ def main():
 
         # Camera capture #####################################################
         image = stream.read()
-        image = image[:, int(cap_width/4):int(3*cap_width/4)]
+        crop_ratio = 8
+        image = image[:, int(cap_width/crop_ratio):int((crop_ratio-1)*cap_width/crop_ratio)]
         image = cv.flip(image, 1)  # Mirror display
 
         # Detection implementation #############################################################
