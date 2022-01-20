@@ -46,6 +46,7 @@ def get_args():
 
     parser.add_argument('--use_static_image_mode', action='store_true')
     parser.add_argument('--debug_mode', action='store_true')
+    parser.add_argument("--trigger_time", help='trigger hold time', type=int, default=3)
     parser.add_argument("--min_detection_confidence",
                         help='min_detection_confidence',
                         type=float,
@@ -77,6 +78,7 @@ def main():
 
     use_static_image_mode = args.use_static_image_mode
     debug_mode = args.debug_mode
+    trigger_time = args.trigger_time
     min_detection_confidence = args.min_detection_confidence
     min_tracking_confidence = args.min_tracking_confidence
     min_classification_confidence = args.min_classification_confidence
@@ -141,6 +143,7 @@ def main():
         GPIO.output(white_led, GPIO.LOW)
 
     fps_last_disp_time = time.time()
+    trigger_set_time = time.time()
     while True:
         fps = cvFpsCalc.get()
 
@@ -184,6 +187,14 @@ def main():
                 message = ""
                 hand = handedness.classification[0].label[0:] # Left or Right hand
                 if confidence > 0.7 and hand == "Right":
+                    if hand_sign_id == 0:
+                        trigger_set_time = time.time() # Set the trigger to allow other actions to be performed
+                        logging.info("Trigger set")
+                        break
+
+                    if (time.time() - trigger_set_time) > trigger_time:
+                        break # Break out if trigger is not set, or expired
+
                     if hand_sign_id == 1:
                         message = "{\"on\":false}"
                     else:
