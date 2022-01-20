@@ -7,6 +7,7 @@ import argparse
 import itertools
 import time
 import math
+import logging
 
 import cv2 as cv
 import numpy as np
@@ -19,17 +20,17 @@ from model import KeyPointClassifier
 import websocket
 # Raspberry Pi specific
 on_rpi = True
+logging.basicConfig(level=logging.DEBUG)
 try:
     import RPi.GPIO as GPIO
     GPIO.setmode(GPIO.BCM)
     white_led = 18
     GPIO.setup(white_led,GPIO.OUT)
-    print("LED setup")
+    logging.info("LED setup complete")
 except Exception as e:
     # Set on_rpi false if developing on other env
-    print(e)
     on_rpi = False
-    print("on_rpi set to false")
+    logging.warning("Can't import RPi.GPIO. Most likely not on Raspberry Pi.")
 
 
 commands = ["070070000", "", "000070000", "000000070", "070000000", "000070070"] #BBBGGGRRR values 
@@ -44,6 +45,7 @@ def get_args():
     parser.add_argument("--height", help='cap height', type=int, default=240)
 
     parser.add_argument('--use_static_image_mode', action='store_true')
+    parser.add_argument('--debug_mode', action='store_true')
     parser.add_argument("--min_detection_confidence",
                         help='min_detection_confidence',
                         type=float,
@@ -74,6 +76,7 @@ def main():
     cap_height = args.height
 
     use_static_image_mode = args.use_static_image_mode
+    debug_mode = args.debug_mode
     min_detection_confidence = args.min_detection_confidence
     min_tracking_confidence = args.min_tracking_confidence
     min_classification_confidence = args.min_classification_confidence
@@ -82,20 +85,24 @@ def main():
     use_brect = True
 
     # Camera preparation ###############################################################
-    import logging
-    logging.basicConfig(level=logging.DEBUG)
+    
     ws = websocket.WebSocket()
     connected = False
     while not connected:
         try:
             ws.connect(webserver_address, timeout=2)
             connected = True
+        except KeyboardInterrupt:
+            logging.info("Exiting...")
+            return
         except:
-            print("Connection failed, retrying...")
+            logging.warning("Connection failed, retrying...")
+
+    
 
     ws.send("{\"transition\":2}") # Set light transition time to 200ms
 
-
+    logging.info("Connection successful")
     stream = WebcamVideoStream(src=cap_device,cap_height=cap_height,cap_width=cap_width).start()
 
     # Model load #############################################################
@@ -127,8 +134,10 @@ def main():
 
     # Signal that app is ready
     if on_rpi:
+        logging.debug("LED Setting to High")
         GPIO.output(white_led, GPIO.HIGH)
         time.sleep(2)
+        logging.debug("LED Setting to Low")
         GPIO.output(white_led, GPIO.LOW)
 
     while True:
@@ -140,12 +149,9 @@ def main():
             break
 
         # Camera capture #####################################################
-        #ret, image = cap.read()
-        # if not ret:
-        #     break
         image = stream.read()
+        image = image[:, int(cap_width/4):int(3*cap_width/4)]
         image = cv.flip(image, 1)  # Mirror display
-        debug_image = copy.deepcopy(image)
 
         # Detection implementation #############################################################
         image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
@@ -153,6 +159,7 @@ def main():
         image.flags.writeable = False
         results = hands.process(image)
         image.flags.writeable = True
+        image = cv.cvtColor(image, cv.COLOR_RGB2BGR)
 
         #  ####################################################################
         if results.multi_hand_landmarks is not None:
@@ -162,9 +169,9 @@ def main():
             for hand_landmarks, handedness in zip(results.multi_hand_landmarks,
                                                   results.multi_handedness):
                 # Bounding box calculation
-                brect = calc_bounding_rect(debug_image, hand_landmarks)
+                brect = calc_bounding_rect(image, hand_landmarks)
                 # Landmark calculation
-                landmark_list = calc_landmark_list(debug_image, hand_landmarks)
+                landmark_list = calc_landmark_list(image, hand_landmarks)
 
                 # Conversion to relative coordinates / normalized coordinates
                 pre_processed_landmark_list = pre_process_landmark(
@@ -173,7 +180,8 @@ def main():
                 # Hand sign classification
                 hand_sign_id, confidence = keypoint_classifier(pre_processed_landmark_list)
                 message = ""
-                if confidence > 0.7:
+                hand = handedness.classification[0].label[0:] # Left or Right hand
+                if confidence > 0.7 and hand == "Right":
                     if hand_sign_id == 1:
                         message = "{\"on\":false}"
                     else:
@@ -182,30 +190,27 @@ def main():
                     if last_hand_sign_id != hand_sign_id:
                         try:
                             ws.send(message)
+                            logging.debug("Sending message: " + message)
                         except:
+                            logging.warning("Connection lost, retrying once")
                             ws.connect(webserver_address, timeout=2)
                             ws.send(message)
 
                     last_hand_sign_id = hand_sign_id
 
                 # Drawing part
-                #debug_image = draw_bounding_rect(use_brect, debug_image, brect)
-                #debug_image = draw_landmarks(debug_image, landmark_list)
-                #debug_image = draw_info_text(
-                #    debug_image,
-                #    brect,
-                #    handedness,
-                #    keypoint_classifier_labels[hand_sign_id],
-                #    confidence,
-                #    min_classification_confidence
-                #)
+                if debug_mode:
+                    image = draw_bounding_rect(use_brect, image, brect)
+                    image = draw_landmarks(image, landmark_list)
+                    image = draw_info_text(image,brect,handedness,keypoint_classifier_labels[hand_sign_id],confidence,min_classification_confidence)
         else:
             if on_rpi:
                 GPIO.output(white_led, GPIO.LOW)
-        #debug_image = draw_info(debug_image, fps)
-
-        # Screen reflection #############################################################
-        #cv.imshow('Hand Gesture Recognition', debug_image)
+        
+        
+        if debug_mode:
+            image = draw_info(image, fps)
+            cv.imshow('Hand Gesture Recognition', image)
 
     #cv.destroyAllWindows()
     ws.close()
