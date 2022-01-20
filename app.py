@@ -33,7 +33,7 @@ except Exception as e:
     logging.warning("Can't import RPi.GPIO. Most likely not on Raspberry Pi.")
 
 
-commands = ["070070000", "", "000070000", "000000070", "070000000", "000070070"] #BBBGGGRRR values 
+commands = ["070070000", "", "000070070", "000000070", "000070000", "070000000"] #BBBGGGRRR values 
 # commands = ["100100000", "", "000100000", "000000100", "100000000", "000100100"] #BBBGGGRRR values 
 
 
@@ -144,6 +144,7 @@ def main():
 
     fps_last_disp_time = time.time()
     trigger_set_time = time.time()
+    trigger = False
     while True:
         fps = cvFpsCalc.get()
 
@@ -187,18 +188,36 @@ def main():
                 message = ""
                 hand = handedness.classification[0].label[0:] # Left or Right hand
                 if confidence > 0.7 and hand == "Right":
-                    if hand_sign_id == 0:
+                    # Drawing part
+                    if debug_mode:
+                        image = draw_bounding_rect(use_brect, image, brect)
+                        image = draw_landmarks(image, landmark_list)
+                        image = draw_info_text(image,brect,handedness,keypoint_classifier_labels[hand_sign_id],confidence,min_classification_confidence)
+                    
+                    if hand_sign_id == 5:
                         trigger_set_time = time.time() # Set the trigger to allow other actions to be performed
-                        logging.info("Trigger set")
+                        if not trigger:
+                            trigger = True
+                            logging.info("Trigger set")
+                            ws.send(f"{{\"seg\":[{{\"fx\":12, \"lx\":{commands[hand_sign_id]}}}]}}"
+)
                         break
 
                     if (time.time() - trigger_set_time) > trigger_time:
-                        break # Break out if trigger is not set, or expired
+                        if trigger:
+                            trigger = False 
+                            logging.info("Trigger timed out, resetting trigger")
+                        
+                    if not trigger:
+                        break    
 
                     if hand_sign_id == 1:
                         message = "{\"on\":false}"
                     else:
                         message = f"{{\"seg\":[{{\"fx\":0, \"lx\":{commands[hand_sign_id]}}}]}}"
+
+                    trigger = False
+                    logging.info("Resetting Trigger")
 
                     if last_hand_sign_id != hand_sign_id:
                         try:
@@ -208,15 +227,12 @@ def main():
                             logging.warning("Connection lost, retrying once")
                             ws.connect(webserver_address, timeout=2)
                             ws.send(message)
+                        
 
                     last_hand_sign_id = hand_sign_id
                 
                 
-                # Drawing part
-                if debug_mode:
-                    image = draw_bounding_rect(use_brect, image, brect)
-                    image = draw_landmarks(image, landmark_list)
-                    image = draw_info_text(image,brect,handedness,keypoint_classifier_labels[hand_sign_id],confidence,min_classification_confidence)
+                
         else:
             if on_rpi:
                 GPIO.output(white_led, GPIO.LOW)
